@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LIVE LEADS & CLIENTS Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; overflow: hidden; }
+
+        /* ---- LOGIN ---- */
+        #login-screen {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex; align-items: center; justify-content: center; z-index: 9999;
+        }
+        #login-screen.hidden { display: none; }
+        .login-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 380px; width: 90%; }
+        .login-box h2 { color: #2c3e50; margin-bottom: 8px; font-size: 22px; }
+        .login-box p { color: #888; font-size: 13px; margin-bottom: 24px; }
+        .login-box input { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
+        .login-box input:focus { border-color: #667eea; }
+        .login-box button { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; }
+        .login-box button:hover { opacity: 0.9; }
+        .login-error { color: #e74c3c; font-size: 13px; margin-top: 10px; display: none; }
+        #app-content { display: none; }
+
+        /* ---- HEADER ---- */
+        #controls {
+            padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; display: flex; align-items: center; gap: 15px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { font-size: 20px; font-weight: 600; margin: 0; }
+        #status { flex: 1; font-size: 14px; opacity: 0.9; }
+        #counts { display: flex; gap: 10px; }
+        .count-badge { background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; }
+        #refreshBtn { padding: 8px 16px; background: white; color: #667eea; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+        #refreshBtn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+
+        /* ---- TABS ---- */
+        #tab-bar {
+            display: flex; background: #f8f9fa; border-bottom: 2px solid #e0e0e0;
+        }
+        .tab-btn {
+            padding: 10px 28px; border: none; background: none; font-size: 14px; font-weight: 600;
+            color: #888; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #555; background: #f0f0f0; }
+        .tab-btn.active { color: #667eea; border-bottom-color: #667eea; }
+
+        /* ---- MAP VIEW ---- */
+        #map-view { position: relative; width: 100%; height: calc(100vh - 105px); }
+        #mapContainer { position: relative; width: 100%; height: 100%; }
+        #map { width: 100%; height: 100%; }
+        #legend {
+            position: absolute; top: 45px; left: 10px; background: white; padding: 15px;
+            border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-height: calc(100vh - 220px); overflow-y: auto; z-index: 1000; min-width: 250px;
+        }
+        #legend h3 { margin: 0 0 10px 0; font-size: 16px; color: #2c3e50; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px; }
+        .legend-section { margin-bottom: 15px; }
+        .legend-section-title { font-size: 13px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; }
+        .legend-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; cursor: pointer; transition: background 0.2s; border-radius: 4px; }
+        .legend-item:hover { background: #f8f9fa; }
+        .legend-item.disabled { opacity: 0.4; }
+        .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; border: 2px solid white; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+        .legend-label { font-size: 13px; color: #333; flex: 1; }
+        .legend-count { font-size: 11px; color: #999; font-weight: 500; }
+        #filterButtons { display: flex; gap: 5px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f0f0f0; }
+        .filter-btn { flex: 1; padding: 6px 10px; background: #f0f0f0; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; color: #666; transition: all 0.2s; }
+        .filter-btn:hover { background: #e0e0e0; }
+
+        /* Active/inactive groups */
+        .client-group-header { display: flex; align-items: center; gap: 8px; padding: 8px; cursor: pointer; border-radius: 6px; margin-bottom: 4px; user-select: none; transition: background 0.2s; }
+        .client-group-header:hover { background: #f0f2f5; }
+        .client-group-header .arrow { font-size: 10px; transition: transform 0.2s; color: #999; }
+        .client-group-header .arrow.open { transform: rotate(90deg); }
+        .client-group-header .group-label { font-size: 13px; font-weight: 600; flex: 1; }
+        .client-group-header .group-count { font-size: 11px; color: #999; font-weight: 500; }
+        .client-group-list { display: none; padding-left: 4px; }
+        .client-group-list.open { display: block; }
+        .active-toggle { width: 18px; height: 18px; border-radius: 4px; border: 2px solid #ccc; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; flex-shrink: 0; transition: all 0.2s; background: white; }
+        .active-toggle:hover { border-color: #999; }
+        .active-toggle.is-active { background: #2ecc71; border-color: #2ecc71; color: white; }
+        .radius-btn { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #00BFFF; background: rgba(0,191,255,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; transition: all 0.2s; color: #00BFFF; }
+        .radius-btn:hover { background: rgba(0,191,255,0.3); }
+        .radius-btn.active { background: #00BFFF; color: white; }
+
+        /* ---- LEADS VIEW ---- */
+        #leads-view { display: none; height: calc(100vh - 105px); overflow: hidden; flex-direction: column; }
+        #leads-view.active { display: flex; }
+        #leads-filters {
+            padding: 12px 20px; background: #f8f9fa; border-bottom: 1px solid #e0e0e0;
+            display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+        }
+        .filter-select {
+            padding: 7px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;
+            background: white; color: #333; outline: none; min-width: 140px;
+        }
+        .filter-select:focus { border-color: #667eea; }
+        #leads-count { font-size: 13px; color: #888; font-weight: 500; margin-left: auto; }
+        #leads-table-container { flex: 1; overflow-y: auto; }
+        #leads-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        #leads-table thead { background: #f0f2f5; position: sticky; top: 0; z-index: 1; }
+        #leads-table th { padding: 10px 14px; text-align: left; font-weight: 600; color: #555; border-bottom: 2px solid #ddd; cursor: pointer; white-space: nowrap; }
+        #leads-table th:hover { background: #e8eaf0; }
+        #leads-table td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; color: #333; }
+        #leads-table tr:hover td { background: #f8f9ff; }
+        .region-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+        .region-sw { background: #fef3c7; color: #92400e; }
+        .region-south { background: #dbeafe; color: #1e40af; }
+        .region-se { background: #ede9fe; color: #5b21b6; }
+        .region-midlands { background: #d1fae5; color: #065f46; }
+        .region-northern { background: #fee2e2; color: #991b1b; }
+        .region-scotland { background: #e0e7ff; color: #3730a3; }
+        .region-ireland { background: #d1fae5; color: #047857; }
+        .region-wales { background: #fce7f3; color: #9d174d; }
+        .region-unknown { background: #f3f4f6; color: #6b7280; }
+        .lead-link { color: #667eea; text-decoration: none; font-weight: 500; }
+        .lead-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div id="login-screen">
+        <div class="login-box">
+            <h2>TNW Energy</h2>
+            <p>Leads & Clients Map — Enter password to continue</p>
+            <input type="password" id="login-password" placeholder="Password" autocomplete="off">
+            <button onclick="attemptLogin()">Sign In</button>
+            <div class="login-error" id="login-error">Incorrect password. Try again.</div>
+        </div>
+    </div>
+    <div id="app-content">
+        <div id="controls">
+            <h1>TNW Energy</h1>
+            <div id="status">Loading...</div>
+            <div id="counts"><div class="count-badge" id="totalCount">0 total</div></div>
+            <button id="refreshBtn">Refresh</button>
+        </div>
+        <div id="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('map')">Map</button>
+            <button class="tab-btn" onclick="switchTab('leads')">Leads</button>
+        </div>
+
+        <!-- MAP VIEW -->
+        <div id="map-view">
+            <div id="mapContainer">
+                <div id="legend">
+                    <h3>Legend & Filters</h3>
+                    <div class="legend-section">
+                        <div class="legend-section-title">Unassigned Leads</div>
+                        <div class="legend-item" data-type="unassigned" onclick="toggleType('unassigned')">
+                            <div class="legend-dot" style="background: #ff0000;"></div>
+                            <div class="legend-label">Unassigned Leads</div>
+                            <div class="legend-count" id="unassigned-count">0</div>
+                        </div>
+                    </div>
+                    <div class="legend-section">
+                        <div class="legend-section-title">Clients (Blue Stars)</div>
+                        <div id="activeGroup">
+                            <div class="client-group-header" onclick="toggleGroup('active')">
+                                <span class="arrow open" id="activeArrow">&#9654;</span>
+                                <span class="group-label" style="color: #2ecc71;">Active Clients</span>
+                                <span class="group-count" id="activeGroupCount">0</span>
+                            </div>
+                            <div class="client-group-list open" id="activeClientsList"></div>
+                        </div>
+                        <div id="inactiveGroup">
+                            <div class="client-group-header" onclick="toggleGroup('inactive')">
+                                <span class="arrow" id="inactiveArrow">&#9654;</span>
+                                <span class="group-label" style="color: #e74c3c;">Inactive Clients</span>
+                                <span class="group-count" id="inactiveGroupCount">0</span>
+                            </div>
+                            <div class="client-group-list" id="inactiveClientsList"></div>
+                        </div>
+                    </div>
+                    <div id="filterButtons">
+                        <button class="filter-btn" onclick="toggleAll(true)">Show All</button>
+                        <button class="filter-btn" onclick="toggleAll(false)">Hide All</button>
+                    </div>
+                </div>
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <!-- LEADS VIEW -->
+        <div id="leads-view">
+            <div id="leads-filters">
+                <select class="filter-select" id="filter-region" onchange="renderLeadsTable()">
+                    <option value="">All Regions</option>
+                    <option value="South West">South West</option>
+                    <option value="South">South</option>
+                    <option value="South East">South East</option>
+                    <option value="Midlands">Midlands</option>
+                    <option value="Wales">Wales</option>
+                    <option value="Northern">Northern</option>
+                    <option value="Scotland">Scotland</option>
+                    <option value="Ireland">Ireland</option>
+                </select>
+                <select class="filter-select" id="filter-rep" onchange="renderLeadsTable()">
+                    <option value="">All Reps</option>
+                </select>
+                <select class="filter-select" id="filter-client" onchange="renderLeadsTable()">
+                    <option value="">All (Assigned & Unassigned)</option>
+                    <option value="__unassigned__">Unassigned Only</option>
+                </select>
+                <select class="filter-select" id="filter-sort" onchange="renderLeadsTable()">
+                    <option value="date-desc">Newest First</option>
+                    <option value="date-asc">Oldest First</option>
+                    <option value="company-asc">Company A-Z</option>
+                    <option value="region-asc">Region A-Z</option>
+                </select>
+                <span id="leads-count"></span>
+            </div>
+            <div id="leads-table-container">
+                <table id="leads-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Location</th>
+                            <th>Region</th>
+                            <th>Rep</th>
+                            <th>Client</th>
+                            <th>Status</th>
+                            <th>Date Added</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ===== AUTH =====
+        let authToken = sessionStorage.getItem('tnw_token') || '';
+        function apiHeaders() { return { 'X-Auth-Token': authToken }; }
+
+        function attemptLogin() {
+            const pwd = document.getElementById('login-password').value;
+            if (pwd === '@TNWENERGY2025') {
+                authToken = pwd;
+                sessionStorage.setItem('tnw_auth', 'true');
+                sessionStorage.setItem('tnw_token', pwd);
+                unlockApp();
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+            }
+        }
+        function unlockApp() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-content').style.display = 'block';
+            init();
+        }
+        document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
+        if (sessionStorage.getItem('tnw_auth') === 'true') { unlockApp(); }
+
+        // ===== CONFIG =====
+        let CONFIG = { AIRTABLE_BASE_ID: '', LEADS_TABLE_ID: '', CLIENTS_TABLE_ID: '', GOOGLE_MAPS_API_KEY: '', AUTO_REFRESH_SECONDS: 300 };
+
+        // ===== STATE =====
+        let map, markers = [], geocoder, geocodeCache = {}, autoRefreshInterval = null;
+        let clientColors = {}, clientIdToName = {};
+        let visibilityState = { unassigned: true };
+        let preserveViewport = false;
+        let clientActiveState = JSON.parse(localStorage.getItem('tnw_client_active') || '{}');
+        let lastClientCounts = {};
+        let allLeadsData = [];  // stored for leads table
+        let allClientsData = []; // stored for leads table + radius
+        let clientCoords = {};   // clientName -> {lat, lng}
+        let radiusCircle = null; // current 100-mile radius circle
+        let activeRadiusClient = null;
+
+        // ===== TABS =====
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector(`.tab-btn[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById('map-view').style.display = tab === 'map' ? 'block' : 'none';
+            const leadsView = document.getElementById('leads-view');
+            if (tab === 'leads') {
+                leadsView.style.display = 'flex';
+                leadsView.classList.add('active');
+                renderLeadsTable();
+            } else {
+                leadsView.style.display = 'none';
+                leadsView.classList.remove('active');
+                google.maps.event.trigger(map, 'resize');
+            }
+        }
+
+        // ===== REGIONS =====
+        const REGIONS = {
+            'Ireland':    { check: (lat, lng) => lng < -5.5 },
+            'Scotland':   { check: (lat, lng) => lat > 55.8 && lng >= -5.5 },
+            'Northern':   { check: (lat, lng) => lat >= 53.0 && lat <= 55.8 && lng >= -5.5 },
+            'Wales':      { check: (lat, lng) => lat >= 51.3 && lat < 53.0 && lng < -2.7 && lng >= -5.5 },
+            'Midlands':   { check: (lat, lng) => lat >= 52.0 && lat < 53.0 && lng >= -2.7 },
+            'South West': { check: (lat, lng) => lat < 52.0 && lng < -1.8 && lng >= -5.5 },
+            'South':      { check: (lat, lng) => lat < 52.0 && lng >= -1.8 && lng < -0.1 },
+            'South East': { check: (lat, lng) => lat < 52.0 && lng >= -0.1 },
+        };
+
+        function classifyRegion(lat, lng) {
+            if (lat == null || lng == null) return 'Unknown';
+            for (const [name, region] of Object.entries(REGIONS)) {
+                if (region.check(lat, lng)) return name;
+            }
+            return 'Unknown';
+        }
+
+        function regionClass(region) {
+            const map = { 'South West': 'sw', 'South': 'south', 'South East': 'se', 'Midlands': 'midlands', 'Northern': 'northern', 'Scotland': 'scotland', 'Ireland': 'ireland', 'Wales': 'wales' };
+            return 'region-' + (map[region] || 'unknown');
+        }
+
+        // ===== CLIENT ACTIVE/INACTIVE =====
+        function saveClientActiveState() { localStorage.setItem('tnw_client_active', JSON.stringify(clientActiveState)); }
+        function isClientActive(name) { return clientActiveState[name] !== false; }
+        function toggleClientActive(name, e) {
+            e.stopPropagation();
+            clientActiveState[name] = !isClientActive(name);
+            saveClientActiveState();
+            updateLegendFromState();
+            updateMarkerVisibility();
+        }
+        function toggleGroup(group) {
+            const list = document.getElementById(group + 'ClientsList');
+            const arrow = document.getElementById(group + 'Arrow');
+            list.classList.toggle('open');
+            arrow.classList.toggle('open');
+        }
+
+        // ===== RADIUS =====
+        function toggleRadius(clientName, e) {
+            e.stopPropagation();
+            if (radiusCircle) { radiusCircle.setMap(null); radiusCircle = null; }
+            if (activeRadiusClient === clientName) { activeRadiusClient = null; updateLegendFromState(); return; }
+            activeRadiusClient = clientName;
+            const coords = clientCoords[clientName];
+            if (coords) {
+                radiusCircle = new google.maps.Circle({
+                    map: map,
+                    center: coords,
+                    radius: 160934, // 100 miles in meters
+                    fillColor: '#00BFFF',
+                    fillOpacity: 0.1,
+                    strokeColor: '#00BFFF',
+                    strokeWeight: 2,
+                    strokeOpacity: 0.5,
+                });
+                // Switch to map tab and center
+                switchTab('map');
+                map.fitBounds(radiusCircle.getBounds());
+                preserveViewport = true;
+            }
+            updateLegendFromState();
+        }
+
+        // ===== GOOGLE MAPS =====
+        function loadGoogleMaps() {
+            return new Promise((resolve, reject) => {
+                if (window.google && window.google.maps) { resolve(); return; }
+                const script = document.createElement('script');
+                script.src = `https://maps.googleapis.com/maps/api/js?key=${CONFIG.GOOGLE_MAPS_API_KEY}`;
+                script.async = true; script.onload = resolve; script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), { center: { lat: 53.8008, lng: -1.5491 }, zoom: 7 });
+            geocoder = new google.maps.Geocoder();
+            map.addListener('zoom_changed', () => { preserveViewport = true; });
+            map.addListener('dragend', () => { preserveViewport = true; });
+        }
+
+        // Load persisted geocode cache from localStorage
+        try { geocodeCache = JSON.parse(localStorage.getItem('tnw_geocode_cache') || '{}'); } catch(e) { geocodeCache = {}; }
+        function saveGeocodeCache() { try { localStorage.setItem('tnw_geocode_cache', JSON.stringify(geocodeCache)); } catch(e) {} }
+
+        async function geocodeAddress(address) {
+            if (geocodeCache[address]) return geocodeCache[address];
+            return new Promise((resolve) => {
+                geocoder.geocode({ address }, (results, status) => {
+                    if (status === 'OK') {
+                        const location = { lat: results[0].geometry.location.lat(), lng: results[0].geometry.location.lng() };
+                        geocodeCache[address] = location;
+                        resolve(location);
+                    } else {
+                        console.log(`Geocode failed for: ${address} - ${status}`);
+                        resolve(null);
+                    }
+                });
+            });
+        }
+
+        // Batch geocode: process N addresses in parallel
+        async function batchGeocode(addresses, batchSize = 10) {
+            const results = {};
+            for (let i = 0; i < addresses.length; i += batchSize) {
+                const batch = addresses.slice(i, i + batchSize);
+                const promises = batch.map(addr => geocodeAddress(addr).then(coords => { results[addr] = coords; }));
+                await Promise.all(promises);
+                document.getElementById('status').textContent = `Geocoding ${Math.min(i + batchSize, addresses.length)}/${addresses.length}...`;
+            }
+            saveGeocodeCache();
+            return results;
+        }
+
+        // ===== DATA FETCH =====
+        async function fetchUnassignedLeads() {
+            try {
+                const response = await fetch('/api/leads', { headers: apiHeaders() });
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                const data = await response.json();
+                return data.records;
+            } catch (error) { console.error('Error fetching leads:', error); return []; }
+        }
+
+        async function fetchClients() {
+            let allClients;
+            try {
+                const response = await fetch('/api/clients', { headers: apiHeaders() });
+                if (!response.ok) throw new Error(`API error: ${response.status}`);
+                const data = await response.json();
+                allClients = data.records;
+            } catch (error) { console.error('Error fetching clients:', error); return []; }
+
+            return allClients.filter(client => {
+                const clientType = (client.fields['client type'] || client.fields['Client Type'] || '').toLowerCase();
+                return !clientType.includes('fulfilled') && !clientType.includes('upsell') && !clientType.includes('marketing');
+            });
+        }
+
+        // ===== LEGEND =====
+        function assignClientColors(clients) {
+            const color = '#00BFFF';
+            clients.forEach((client) => {
+                const clientName = client.fields['Client Name'];
+                if (clientName) {
+                    clientColors[clientName] = color;
+                    if (visibilityState[clientName] === undefined) visibilityState[clientName] = true;
+                }
+            });
+        }
+
+        function updateLegend(unassignedCount, clientCounts) {
+            document.getElementById('unassigned-count').textContent = unassignedCount;
+            lastClientCounts = clientCounts;
+            renderClientLegend(clientCounts);
+        }
+
+        function renderClientLegend(clientCounts) {
+            const allClients = Object.keys(clientColors).sort();
+            const activeClients = allClients.filter(n => isClientActive(n));
+            const inactiveClients = allClients.filter(n => !isClientActive(n));
+            document.getElementById('activeGroupCount').textContent = activeClients.length;
+            document.getElementById('inactiveGroupCount').textContent = inactiveClients.length;
+            document.getElementById('activeClientsList').innerHTML = activeClients.map(n => buildClientRow(n, clientCounts)).join('');
+            document.getElementById('inactiveClientsList').innerHTML = inactiveClients.map(n => buildClientRow(n, clientCounts)).join('');
+        }
+
+        function buildClientRow(clientName, clientCounts) {
+            const count = clientCounts[clientName] || 0;
+            const enabled = visibilityState[clientName];
+            const active = isClientActive(clientName);
+            const esc = clientName.replace(/'/g, "\\'");
+            const hasCoords = !!clientCoords[clientName];
+            const radiusActive = activeRadiusClient === clientName;
+            return `
+                <div class="legend-item ${enabled ? '' : 'disabled'}" data-type="client" data-client="${clientName}" onclick="toggleType('${esc}')">
+                    <div class="active-toggle ${active ? 'is-active' : ''}" onclick="toggleClientActive('${esc}', event)" title="${active ? 'Mark inactive' : 'Mark active'}">${active ? '&#10003;' : ''}</div>
+                    <div style="width:16px;height:16px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                        <svg width="14" height="14" viewBox="0 0 24 24"><path d="M 12,2 14.5,9.5 22,9.5 16,14 18,22 12,17 6,22 8,14 2,9.5 9.5,9.5 Z" fill="${active ? '#00BFFF' : '#ccc'}" stroke="white" stroke-width="1.5"/></svg>
+                    </div>
+                    <div class="legend-label" style="${active ? '' : 'color:#aaa;'}">${clientName}</div>
+                    ${hasCoords ? `<div class="radius-btn ${radiusActive ? 'active' : ''}" onclick="toggleRadius('${esc}', event)" title="Show 100mi radius">R</div>` : ''}
+                    <div class="legend-count">${count}</div>
+                </div>`;
+        }
+
+        function updateLegendFromState() { renderClientLegend(lastClientCounts); }
+
+        function toggleType(type) { visibilityState[type] = !visibilityState[type]; updateMarkerVisibility(); updateLegendUI(); }
+
+        function toggleAll(show) {
+            visibilityState.unassigned = show;
+            Object.keys(clientColors).forEach(n => { visibilityState[n] = show; });
+            updateMarkerVisibility(); updateLegendUI();
+        }
+
+        function updateMarkerVisibility() {
+            markers.forEach(marker => {
+                const cat = marker.markerCategory;
+                let shouldShow = visibilityState[cat];
+                if (cat !== 'unassigned' && !isClientActive(cat)) shouldShow = false;
+                marker.setVisible(shouldShow);
+            });
+        }
+
+        function updateLegendUI() {
+            document.querySelectorAll('.legend-item').forEach(item => {
+                const type = item.getAttribute('data-type');
+                const clientName = item.getAttribute('data-client');
+                const category = type === 'unassigned' ? 'unassigned' : clientName;
+                if (visibilityState[category]) item.classList.remove('disabled');
+                else item.classList.add('disabled');
+            });
+        }
+
+        // ===== MAP PLOTTING =====
+        function clearMarkers() { markers.forEach(m => m.setMap(null)); markers = []; }
+
+        async function plotAll() {
+            document.getElementById('status').textContent = 'Loading data...';
+            const [unassignedLeads, clients] = await Promise.all([fetchUnassignedLeads(), fetchClients()]);
+
+            allLeadsData = unassignedLeads;
+            allClientsData = clients;
+            assignClientColors(clients);
+
+            const clientCounts = {};
+            clients.forEach(client => {
+                const name = client.fields['Client Name'];
+                if (name) clientCounts[name] = (clientCounts[name] || 0) + 1;
+            });
+            updateLegend(unassignedLeads.length, clientCounts);
+            document.getElementById('totalCount').textContent = `${unassignedLeads.length} leads, ${clients.length} clients`;
+
+            // Collect all addresses to geocode
+            const allAddresses = new Set();
+            unassignedLeads.forEach(l => { if (l.fields.location) allAddresses.add(l.fields.location); });
+            clients.forEach(c => {
+                const loc = c.fields.location || c.fields.Location || c.fields.address || c.fields.Address || c.fields['Client Address'] || c.fields['client address'];
+                if (loc) allAddresses.add(loc);
+            });
+
+            // Batch geocode all addresses in parallel (10 at a time)
+            document.getElementById('status').textContent = `Geocoding ${allAddresses.size} addresses...`;
+            await batchGeocode([...allAddresses], 10);
+
+            // Now place all markers synchronously (instant)
+            clearMarkers();
+            const bounds = new google.maps.LatLngBounds();
+            let plotted = 0;
+
+            // Plot leads
+            for (const lead of unassignedLeads) {
+                const company = lead.fields.company || lead.fields.Company || lead.fields.name || lead.fields.Name || 'Unknown';
+                const location = lead.fields.location;
+                const sdrName = lead.fields['SDR Name'] || lead.fields['sdr name'] || lead.fields['Rep Name'] || null;
+                if (!location) continue;
+                const coords = geocodeCache[location];
+                if (!coords) continue;
+
+                lead._coords = coords;
+                lead._region = classifyRegion(coords.lat, coords.lng);
+
+                const marker = new google.maps.Marker({
+                    position: coords, map: map, title: company,
+                    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 8, fillColor: '#ff0000', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2 }
+                });
+                marker.markerCategory = 'unassigned';
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `<div style="padding:12px;max-width:320px;">
+                        <div style="background:#ff0000;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">UNASSIGNED LEAD</div>
+                        <h3 style="margin:0 0 10px 0;color:#2c3e50;font-size:16px;">${company}</h3>
+                        ${sdrName ? `<p style="margin:5px 0;font-size:13px;color:#667eea;"><strong>Booked by:</strong> ${sdrName}</p>` : ''}
+                        ${lead.fields.photos && lead.fields.photos.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${lead.fields.photos[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
+                        <p style="margin:5px 0;font-size:13px;"><strong>📍</strong> ${location}</p>
+                        <p style="margin:5px 0;font-size:13px;"><strong>📌</strong> <span class="region-badge ${regionClass(lead._region)}">${lead._region}</span></p>
+                        ${lead.fields.email ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${lead.fields.email}">${lead.fields.email}</a></p>` : ''}
+                        ${lead.fields.phone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${lead.fields.phone}">${lead.fields.phone}</a></p>` : ''}
+                        ${lead.fields.status ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${lead.fields.status}</p>` : ''}
+                        ${lead.fields['Energy consumption information'] ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #667eea;"><div style="font-weight:600;font-size:12px;color:#667eea;margin-bottom:5px;">Energy Info</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${lead.fields['Energy consumption information'].substring(0,200)}${lead.fields['Energy consumption information'].length > 200 ? '...' : ''}</div></div>` : ''}
+                        <p style="margin:10px 0 0 0;padding-top:8px;border-top:1px solid #eee;"><a href="https://airtable.com/${CONFIG.AIRTABLE_BASE_ID}/${CONFIG.LEADS_TABLE_ID}/${lead.id}?blocks=hide" target="_blank" style="color:#667eea;text-decoration:none;font-weight:500;font-size:12px;">Open in Airtable →</a></p>
+                    </div>`
+                });
+                marker.addListener('click', () => { markers.forEach(m => m.infoWindow && m.infoWindow.close()); infoWindow.open(map, marker); });
+                marker.infoWindow = infoWindow;
+                marker.setVisible(visibilityState['unassigned']);
+                markers.push(marker); bounds.extend(coords); plotted++;
+            }
+
+            // Plot clients
+            for (const client of clients) {
+                const clientName = client.fields['Client Name'];
+                const location = client.fields.location || client.fields.Location || client.fields.address || client.fields.Address || client.fields['Client Address'] || client.fields['client address'];
+                if (!location || !clientName) continue;
+                const coords = geocodeCache[location];
+                if (!coords) continue;
+
+                clientCoords[clientName] = coords;
+                client._coords = coords;
+                client._region = classifyRegion(coords.lat, coords.lng);
+
+                const marker = new google.maps.Marker({
+                    position: coords, map: map, title: clientName,
+                    icon: { path: 'M 0,-24 6,-7 24,-7 10,4 15,21 0,11 -15,21 -10,4 -24,-7 -6,-7 Z', fillColor: '#00BFFF', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 2, scale: 0.7 }
+                });
+                marker.markerCategory = clientName;
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: `<div style="padding:12px;max-width:320px;">
+                        <div style="background:#00BFFF;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">CLIENT</div>
+                        <h3 style="margin:0 0 10px 0;color:#2c3e50;font-size:16px;">${clientName}</h3>
+                        ${client.fields.photos && client.fields.photos.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${client.fields.photos[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
+                        <p style="margin:5px 0;font-size:13px;"><strong>📍</strong> ${location}</p>
+                        ${client.fields.email ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${client.fields.email}">${client.fields.email}</a></p>` : ''}
+                        ${client.fields.phone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${client.fields.phone}">${client.fields.phone}</a></p>` : ''}
+                        ${client.fields['client type'] ? `<p style="margin:5px 0;font-size:13px;"><strong>Type:</strong> ${client.fields['client type']}</p>` : ''}
+                        ${client.fields.status ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${client.fields.status}</p>` : ''}
+                        ${client.fields.info || client.fields.Info ? `<div style="margin:10px 0;padding:10px;background:#e3f2fd;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${(client.fields.info || client.fields.Info).substring(0,400)}</div></div>` : ''}
+                        ${client.fields['Energy consumption information'] ? `<div style="margin:10px 0;padding:10px;background:#e3f2fd;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Energy Info</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${client.fields['Energy consumption information'].substring(0,200)}</div></div>` : ''}
+                        ${client.fields.notes ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Notes</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${client.fields.notes.substring(0,200)}</div></div>` : ''}
+                        <p style="margin:10px 0 0 0;padding-top:8px;border-top:1px solid #eee;"><a href="https://airtable.com/${CONFIG.AIRTABLE_BASE_ID}/${CONFIG.CLIENTS_TABLE_ID}/${client.id}?blocks=hide" target="_blank" style="color:#00BFFF;text-decoration:none;font-weight:500;font-size:12px;">Open in Airtable →</a></p>
+                    </div>`
+                });
+                marker.addListener('click', () => { markers.forEach(m => m.infoWindow && m.infoWindow.close()); infoWindow.open(map, marker); });
+                marker.infoWindow = infoWindow;
+                marker.setVisible(visibilityState[clientName]);
+                markers.push(marker); bounds.extend(coords); plotted++;
+            }
+
+            renderClientLegend(clientCounts);
+            populateFilterDropdowns();
+
+            if (plotted > 0) {
+                if (!preserveViewport) map.fitBounds(bounds);
+                document.getElementById('status').textContent = `${unassignedLeads.length} leads, ${clients.length} clients mapped`;
+            } else {
+                document.getElementById('status').textContent = 'No locations found';
+            }
+        }
+
+        // ===== LEADS TABLE =====
+        function populateFilterDropdowns() {
+            // Reps
+            const reps = new Set();
+            allLeadsData.forEach(l => {
+                const rep = l.fields['SDR Name'] || l.fields['sdr name'] || l.fields['Rep Name'];
+                if (rep) reps.add(Array.isArray(rep) ? rep[0] : rep);
+            });
+            const repSelect = document.getElementById('filter-rep');
+            const currentRep = repSelect.value;
+            repSelect.innerHTML = '<option value="">All Reps</option>' + [...reps].sort().map(r => `<option value="${r}">${r}</option>`).join('');
+            repSelect.value = currentRep;
+
+            // Clients
+            const clientSelect = document.getElementById('filter-client');
+            const currentClient = clientSelect.value;
+            const clientNames = Object.keys(clientColors).sort();
+            clientSelect.innerHTML = '<option value="">All (Assigned & Unassigned)</option><option value="__unassigned__">Unassigned Only</option>' + clientNames.map(c => `<option value="${c}">${c}</option>`).join('');
+            clientSelect.value = currentClient;
+        }
+
+        function renderLeadsTable() {
+            const regionFilter = document.getElementById('filter-region').value;
+            const repFilter = document.getElementById('filter-rep').value;
+            const clientFilter = document.getElementById('filter-client').value;
+            const sortBy = document.getElementById('filter-sort').value;
+
+            // Combine leads (unassigned) - they're the main dataset
+            let leads = allLeadsData.map(l => {
+                const company = l.fields.company || l.fields.Company || l.fields.name || l.fields.Name || 'Unknown';
+                const location = l.fields.location || '';
+                const rep = l.fields['SDR Name'] || l.fields['sdr name'] || l.fields['Rep Name'] || '';
+                const repStr = Array.isArray(rep) ? rep[0] : rep;
+                const client = l.fields.client || '';
+                const clientStr = Array.isArray(client) ? client.join(', ') : client;
+                const status = l.fields.status || '';
+                const email = l.fields.email || '';
+                const phone = l.fields.phone || '';
+                const created = l.createdTime || '';
+                const region = l._region || 'Unknown';
+                const id = l.id;
+                return { company, location, rep: repStr, client: clientStr, status, email, phone, created, region, id };
+            });
+
+            // Apply filters
+            if (regionFilter) leads = leads.filter(l => l.region === regionFilter);
+            if (repFilter) leads = leads.filter(l => l.rep === repFilter);
+            if (clientFilter === '__unassigned__') leads = leads.filter(l => !l.client);
+            else if (clientFilter) leads = leads.filter(l => l.client.includes(clientFilter));
+
+            // Sort
+            leads.sort((a, b) => {
+                if (sortBy === 'date-desc') return (b.created || '').localeCompare(a.created || '');
+                if (sortBy === 'date-asc') return (a.created || '').localeCompare(b.created || '');
+                if (sortBy === 'company-asc') return a.company.localeCompare(b.company);
+                if (sortBy === 'region-asc') return a.region.localeCompare(b.region);
+                return 0;
+            });
+
+            document.getElementById('leads-count').textContent = `${leads.length} leads`;
+
+            const tbody = document.getElementById('leads-tbody');
+            tbody.innerHTML = leads.map(l => {
+                const dateStr = l.created ? new Date(l.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+                return `<tr>
+                    <td><a class="lead-link" href="https://airtable.com/${CONFIG.AIRTABLE_BASE_ID}/${CONFIG.LEADS_TABLE_ID}/${l.id}?blocks=hide" target="_blank">${l.company}</a></td>
+                    <td>${l.location}</td>
+                    <td><span class="region-badge ${regionClass(l.region)}">${l.region}</span></td>
+                    <td>${l.rep || '-'}</td>
+                    <td>${l.client || '<span style="color:#e74c3c;font-weight:500;">Unassigned</span>'}</td>
+                    <td>${l.status || '-'}</td>
+                    <td>${dateStr}</td>
+                    <td>${l.email ? `<a href="mailto:${l.email}">${l.email}</a>` : '-'}</td>
+                    <td>${l.phone ? `<a href="tel:${l.phone}">${l.phone}</a>` : '-'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ===== REFRESH & INIT =====
+        function startAutoRefresh() {
+            if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+            autoRefreshInterval = setInterval(plotAll, CONFIG.AUTO_REFRESH_SECONDS * 1000);
+        }
+
+        async function init() {
+            try {
+                const configRes = await fetch('/api/config', { headers: apiHeaders() });
+                if (!configRes.ok) throw new Error('Failed to load config');
+                const serverConfig = await configRes.json();
+                CONFIG.AIRTABLE_BASE_ID = serverConfig.AIRTABLE_BASE_ID;
+                CONFIG.LEADS_TABLE_ID = serverConfig.LEADS_TABLE_ID;
+                CONFIG.CLIENTS_TABLE_ID = serverConfig.CLIENTS_TABLE_ID;
+                CONFIG.GOOGLE_MAPS_API_KEY = serverConfig.GOOGLE_MAPS_API_KEY;
+
+                await loadGoogleMaps();
+                initMap();
+                await plotAll();
+                startAutoRefresh();
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('status').textContent = 'Error loading map';
+            }
+        }
+
+        document.getElementById('refreshBtn').addEventListener('click', plotAll);
+    </script>
+</body>
+</html>
