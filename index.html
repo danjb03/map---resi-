@@ -665,21 +665,42 @@
             updateLegend(unassignedLeads.length, clientCounts);
             document.getElementById('totalCount').textContent = `${unassignedLeads.length} leads, ${clients.length} clients`;
 
-            // Collect all addresses to geocode
-            const allAddresses = new Set();
-            unassignedLeads.forEach(l => { if (l.fields['Booking Address']) allAddresses.add(l.fields['Booking Address']); });
+            // Resolve coordinates: use Lat/Lng fields from Airtable, fall back to geocode cache, then geocode as last resort
+            function getCoords(record, addressField) {
+                const lat = parseFloat(record.fields['Lat']);
+                const lng = parseFloat(record.fields['Lng']);
+                if (!isNaN(lat) && !isNaN(lng)) return { lat, lng };
+                const addr = record.fields[addressField];
+                if (addr && geocodeCache[addr]) return geocodeCache[addr];
+                return null;
+            }
+
+            // Collect addresses that need geocoding (no Lat/Lng and not cached)
+            const needGeocode = new Set();
+            unassignedLeads.forEach(l => {
+                if (isNaN(parseFloat(l.fields['Lat'])) || isNaN(parseFloat(l.fields['Lng']))) {
+                    const addr = l.fields['Booking Address'];
+                    if (addr && !geocodeCache[addr]) needGeocode.add(addr);
+                }
+            });
             clients.forEach(c => {
-                const loc = c.fields['Mailing Address'];
-                if (loc) allAddresses.add(loc);
+                if (isNaN(parseFloat(c.fields['Lat'])) || isNaN(parseFloat(c.fields['Lng']))) {
+                    const addr = c.fields['Mailing Address'];
+                    if (addr && !geocodeCache[addr]) needGeocode.add(addr);
+                }
             });
 
-            // Batch geocode (50 at a time, skips cached)
-            await batchGeocode([...allAddresses], 50);
+            // Only geocode the few records missing Lat/Lng
+            if (needGeocode.size > 0) {
+                document.getElementById('status').textContent = `Geocoding ${needGeocode.size} addresses without coordinates...`;
+                await batchGeocode([...needGeocode], 50);
+            }
 
             // Now place all markers synchronously
             clearMarkers();
             const bounds = new google.maps.LatLngBounds();
             let plotted = 0;
+            let skippedNoCoords = 0;
 
             // Plot leads
             for (const lead of unassignedLeads) {
@@ -687,9 +708,8 @@
                 const location = lead.fields['Booking Address'];
                 const sdrName = lead.fields['Rep Name'] || null;
                 const repDisplay = Array.isArray(sdrName) ? sdrName[0] : sdrName;
-                if (!location) continue;
-                const coords = geocodeCache[location];
-                if (!coords) continue;
+                const coords = getCoords(lead, 'Booking Address');
+                if (!coords) { skippedNoCoords++; continue; }
 
                 lead._coords = coords;
                 lead._region = lead.fields['City / Region'] || classifyRegion(coords.lat, coords.lng);
@@ -741,8 +761,8 @@
             for (const client of clients) {
                 const clientName = client.fields['Client Name'];
                 const location = client.fields['Mailing Address'];
-                if (!location || !clientName) continue;
-                const coords = geocodeCache[location];
+                if (!clientName) continue;
+                const coords = getCoords(client, 'Mailing Address');
                 if (!coords) continue;
 
                 clientCoords[clientName] = coords;
@@ -798,7 +818,8 @@
 
             if (plotted > 0) {
                 if (!preserveViewport) map.fitBounds(bounds);
-                document.getElementById('status').textContent = `${unassignedLeads.length} leads, ${clients.length} clients mapped`;
+                const skipMsg = skippedNoCoords > 0 ? ` (${skippedNoCoords} missing coords)` : '';
+                document.getElementById('status').textContent = `${unassignedLeads.length} leads, ${clients.length} clients mapped${skipMsg}`;
             } else {
                 document.getElementById('status').textContent = 'No locations found';
             }
