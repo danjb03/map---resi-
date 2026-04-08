@@ -68,6 +68,35 @@
         .radius-btn:hover { background: rgba(0,191,255,0.3); }
         .radius-btn.active { background: #00BFFF; color: white; }
 
+        /* ---- RADIUS TOOL ---- */
+        #radius-tool {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: white; padding: 12px 20px; border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25); z-index: 1000;
+            display: none; align-items: center; gap: 12px; min-width: 420px;
+        }
+        #radius-tool.active { display: flex; }
+        #radius-tool label { font-size: 13px; font-weight: 600; color: #333; white-space: nowrap; }
+        #radius-slider { flex: 1; accent-color: #667eea; min-width: 120px; }
+        #radius-value { font-size: 13px; font-weight: 700; color: #667eea; min-width: 55px; text-align: center; }
+        #radius-count { font-size: 12px; color: #888; white-space: nowrap; }
+        .radius-tool-btn { padding: 6px 12px; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+        #radius-view-btn { background: #667eea; color: white; }
+        #radius-view-btn:hover { background: #5a6fd6; }
+        #radius-clear-btn { background: #f0f0f0; color: #666; }
+        #radius-clear-btn:hover { background: #e0e0e0; }
+
+        /* Drop pin button */
+        #drop-pin-btn {
+            position: absolute; top: 10px; right: 10px; z-index: 1000;
+            padding: 10px 16px; background: white; border: 2px solid #667eea; color: #667eea;
+            border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15); transition: all 0.2s;
+        }
+        #drop-pin-btn:hover { background: #667eea; color: white; }
+        #drop-pin-btn.active { background: #667eea; color: white; }
+        #drop-pin-btn.has-pin { background: #e74c3c; border-color: #e74c3c; color: white; }
+
         /* ---- LEADS VIEW ---- */
         #leads-view { display: none; height: calc(100vh - 105px); overflow: hidden; flex-direction: column; }
         #leads-view.active { display: flex; }
@@ -80,7 +109,10 @@
             background: white; color: #333; outline: none; min-width: 140px;
         }
         .filter-select:focus { border-color: #667eea; }
-        #leads-count { font-size: 13px; color: #888; font-weight: 500; margin-left: auto; }
+        .filter-select.radius-active { border-color: #e74c3c; background: #fef2f2; font-weight: 600; color: #e74c3c; }
+        #leads-count { font-size: 13px; color: #888; font-weight: 500; }
+        .export-btn { padding: 7px 14px; background: #2ecc71; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: auto; transition: all 0.2s; }
+        .export-btn:hover { background: #27ae60; }
         #leads-table-container { flex: 1; overflow-y: auto; }
         #leads-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         #leads-table thead { background: #f0f2f5; position: sticky; top: 0; z-index: 1; }
@@ -152,6 +184,15 @@
                         <button class="filter-btn" onclick="toggleAll(false)">Hide All</button>
                     </div>
                 </div>
+                <button id="drop-pin-btn" onclick="toggleDropPinMode()">📍 Drop Pin</button>
+                <div id="radius-tool">
+                    <label>Radius:</label>
+                    <input type="range" id="radius-slider" min="1" max="100" value="25" oninput="updateRadiusFromSlider()">
+                    <span id="radius-value">25 mi</span>
+                    <span id="radius-count">0 leads</span>
+                    <button class="radius-tool-btn" id="radius-view-btn" onclick="viewRadiusLeads()">View Leads</button>
+                    <button class="radius-tool-btn" id="radius-clear-btn" onclick="clearRadiusPin()">Clear</button>
+                </div>
                 <div id="map"></div>
             </div>
         </div>
@@ -173,9 +214,10 @@
                 <select class="filter-select" id="filter-rep" onchange="renderLeadsTable()">
                     <option value="">All Reps</option>
                 </select>
-                <select class="filter-select" id="filter-client" onchange="renderLeadsTable()">
+                <select class="filter-select" id="filter-client" onchange="onClientFilterChange()">
                     <option value="">All (Assigned & Unassigned)</option>
                     <option value="__unassigned__">Unassigned Only</option>
+                    <option value="__radius__" id="radius-filter-option" style="display:none;">📍 Radius Selected Leads</option>
                 </select>
                 <select class="filter-select" id="filter-sort" onchange="renderLeadsTable()">
                     <option value="date-desc">Newest First</option>
@@ -184,6 +226,7 @@
                     <option value="region-asc">Region A-Z</option>
                 </select>
                 <span id="leads-count"></span>
+                <button class="export-btn" onclick="exportCSV()">Export CSV</button>
             </div>
             <div id="leads-table-container">
                 <table id="leads-table">
@@ -220,11 +263,18 @@
         let preserveViewport = false;
         let clientActiveState = JSON.parse(localStorage.getItem('tnw_resi_client_active') || '{}');
         let lastClientCounts = {};
-        let allLeadsData = [];  // stored for leads table
-        let allClientsData = []; // stored for leads table + radius
-        let clientCoords = {};   // clientName -> {lat, lng}
-        let radiusCircle = null; // current 100-mile radius circle
+        let allLeadsData = [];
+        let allClientsData = [];
+        let clientCoords = {};
+        let radiusCircle = null;
         let activeRadiusClient = null;
+
+        // Radius pin state
+        let dropPinMode = false;
+        let radiusPin = null;        // google.maps.Marker for the dropped pin
+        let radiusPinCircle = null;  // google.maps.Circle for the radius
+        let radiusLeadIds = new Set(); // IDs of leads inside radius
+        let lastFilteredLeads = [];  // for CSV export
 
         // ===== TABS =====
         function switchTab(tab) {
@@ -285,7 +335,7 @@
             arrow.classList.toggle('open');
         }
 
-        // ===== RADIUS =====
+        // ===== CLIENT RADIUS (existing) =====
         function toggleRadius(clientName, e) {
             e.stopPropagation();
             if (radiusCircle) { radiusCircle.setMap(null); radiusCircle = null; }
@@ -294,21 +344,141 @@
             const coords = clientCoords[clientName];
             if (coords) {
                 radiusCircle = new google.maps.Circle({
-                    map: map,
-                    center: coords,
-                    radius: 160934, // 100 miles in meters
-                    fillColor: '#00BFFF',
-                    fillOpacity: 0.1,
-                    strokeColor: '#00BFFF',
-                    strokeWeight: 2,
-                    strokeOpacity: 0.5,
+                    map: map, center: coords, radius: 160934,
+                    fillColor: '#00BFFF', fillOpacity: 0.1, strokeColor: '#00BFFF', strokeWeight: 2, strokeOpacity: 0.5,
                 });
-                // Switch to map tab and center
                 switchTab('map');
                 map.fitBounds(radiusCircle.getBounds());
                 preserveViewport = true;
             }
             updateLegendFromState();
+        }
+
+        // ===== RADIUS PIN TOOL =====
+        function toggleDropPinMode() {
+            const btn = document.getElementById('drop-pin-btn');
+            if (radiusPin) {
+                // If pin exists, clicking toggles between "move pin" mode and normal
+                dropPinMode = !dropPinMode;
+                btn.className = dropPinMode ? 'active' : 'has-pin';
+                map.setOptions({ draggableCursor: dropPinMode ? 'crosshair' : null });
+                return;
+            }
+            dropPinMode = !dropPinMode;
+            btn.className = dropPinMode ? 'active' : '';
+            map.setOptions({ draggableCursor: dropPinMode ? 'crosshair' : null });
+        }
+
+        function handleMapClick(e) {
+            if (!dropPinMode) return;
+            const lat = e.latLng.lat();
+            const lng = e.latLng.lng();
+            placeRadiusPin(lat, lng);
+            // Exit drop pin mode
+            dropPinMode = false;
+            document.getElementById('drop-pin-btn').className = 'has-pin';
+            map.setOptions({ draggableCursor: null });
+        }
+
+        function placeRadiusPin(lat, lng) {
+            // Remove existing
+            if (radiusPin) radiusPin.setMap(null);
+            if (radiusPinCircle) radiusPinCircle.setMap(null);
+
+            radiusPin = new google.maps.Marker({
+                position: { lat, lng }, map: map,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: '#e74c3c', fillOpacity: 1, strokeColor: '#ffffff', strokeWeight: 3 },
+                draggable: true, zIndex: 9999,
+                title: 'Drag to move'
+            });
+
+            // When pin is dragged, update circle
+            radiusPin.addListener('dragend', () => updateRadiusCircle());
+
+            updateRadiusCircle();
+            document.getElementById('radius-tool').classList.add('active');
+        }
+
+        function updateRadiusFromSlider() {
+            const miles = parseInt(document.getElementById('radius-slider').value);
+            document.getElementById('radius-value').textContent = miles + ' mi';
+            if (radiusPin) updateRadiusCircle();
+        }
+
+        function updateRadiusCircle() {
+            if (!radiusPin) return;
+            const center = radiusPin.getPosition();
+            const miles = parseInt(document.getElementById('radius-slider').value);
+            const meters = miles * 1609.34;
+
+            if (radiusPinCircle) radiusPinCircle.setMap(null);
+            radiusPinCircle = new google.maps.Circle({
+                map: map, center: { lat: center.lat(), lng: center.lng() }, radius: meters,
+                fillColor: '#e74c3c', fillOpacity: 0.08, strokeColor: '#e74c3c', strokeWeight: 2, strokeOpacity: 0.6,
+                clickable: false
+            });
+
+            // Calculate leads inside radius
+            radiusLeadIds.clear();
+            let count = 0;
+            allLeadsData.forEach(lead => {
+                if (!lead._coords) return;
+                const dist = haversineDistance(center.lat(), center.lng(), lead._coords.lat, lead._coords.lng);
+                if (dist <= miles) {
+                    radiusLeadIds.add(lead.id);
+                    count++;
+                }
+            });
+            document.getElementById('radius-count').textContent = count + ' leads';
+
+            // Show radius filter option
+            document.getElementById('radius-filter-option').style.display = 'block';
+        }
+
+        function viewRadiusLeads() {
+            // Switch to leads tab with radius filter active
+            document.getElementById('filter-client').value = '__radius__';
+            onClientFilterChange();
+            switchTab('leads');
+        }
+
+        function clearRadiusPin() {
+            if (radiusPin) { radiusPin.setMap(null); radiusPin = null; }
+            if (radiusPinCircle) { radiusPinCircle.setMap(null); radiusPinCircle = null; }
+            radiusLeadIds.clear();
+            dropPinMode = false;
+            document.getElementById('drop-pin-btn').className = '';
+            document.getElementById('radius-tool').classList.remove('active');
+            document.getElementById('radius-filter-option').style.display = 'none';
+            map.setOptions({ draggableCursor: null });
+            // Reset filter if it was on radius
+            const clientFilter = document.getElementById('filter-client');
+            if (clientFilter.value === '__radius__') {
+                clientFilter.value = '';
+                clientFilter.classList.remove('radius-active');
+                renderLeadsTable();
+            }
+        }
+
+        function onClientFilterChange() {
+            const sel = document.getElementById('filter-client');
+            if (sel.value === '__radius__') {
+                sel.classList.add('radius-active');
+            } else {
+                sel.classList.remove('radius-active');
+            }
+            renderLeadsTable();
+        }
+
+        // Haversine distance in miles
+        function haversineDistance(lat1, lng1, lat2, lng2) {
+            const R = 3958.8; // Earth radius in miles
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
         // ===== GOOGLE MAPS =====
@@ -327,6 +497,7 @@
             geocoder = new google.maps.Geocoder();
             map.addListener('zoom_changed', () => { preserveViewport = true; });
             map.addListener('dragend', () => { preserveViewport = true; });
+            map.addListener('click', handleMapClick);
         }
 
         // Load persisted geocode cache from localStorage
@@ -349,14 +520,26 @@
             });
         }
 
-        // Batch geocode: process N addresses in parallel
-        async function batchGeocode(addresses, batchSize = 10) {
+        // Batch geocode with higher parallelism
+        async function batchGeocode(addresses, batchSize = 50) {
             const results = {};
-            for (let i = 0; i < addresses.length; i += batchSize) {
-                const batch = addresses.slice(i, i + batchSize);
+            // Split into cached and uncached
+            const uncached = addresses.filter(a => !geocodeCache[a]);
+            const cached = addresses.filter(a => geocodeCache[a]);
+            cached.forEach(a => { results[a] = geocodeCache[a]; });
+
+            if (uncached.length === 0) {
+                document.getElementById('status').textContent = `All ${addresses.length} addresses cached`;
+                return results;
+            }
+
+            document.getElementById('status').textContent = `${cached.length} cached, geocoding ${uncached.length} new...`;
+
+            for (let i = 0; i < uncached.length; i += batchSize) {
+                const batch = uncached.slice(i, i + batchSize);
                 const promises = batch.map(addr => geocodeAddress(addr).then(coords => { results[addr] = coords; }));
                 await Promise.all(promises);
-                document.getElementById('status').textContent = `Geocoding ${Math.min(i + batchSize, addresses.length)}/${addresses.length}...`;
+                document.getElementById('status').textContent = `Geocoding ${Math.min(i + batchSize, uncached.length)}/${uncached.length} new addresses...`;
             }
             saveGeocodeCache();
             return results;
@@ -490,11 +673,10 @@
                 if (loc) allAddresses.add(loc);
             });
 
-            // Batch geocode all addresses in parallel (10 at a time)
-            document.getElementById('status').textContent = `Geocoding ${allAddresses.size} addresses...`;
-            await batchGeocode([...allAddresses], 10);
+            // Batch geocode (50 at a time, skips cached)
+            await batchGeocode([...allAddresses], 50);
 
-            // Now place all markers synchronously (instant)
+            // Now place all markers synchronously
             clearMarkers();
             const bounds = new google.maps.LatLngBounds();
             let plotted = 0;
@@ -611,6 +793,9 @@
             renderClientLegend(clientCounts);
             populateFilterDropdowns();
 
+            // Recalculate radius if pin exists
+            if (radiusPin) updateRadiusCircle();
+
             if (plotted > 0) {
                 if (!preserveViewport) map.fitBounds(bounds);
                 document.getElementById('status').textContent = `${unassignedLeads.length} leads, ${clients.length} clients mapped`;
@@ -621,7 +806,6 @@
 
         // ===== LEADS TABLE =====
         function populateFilterDropdowns() {
-            // Reps
             const reps = new Set();
             allLeadsData.forEach(l => {
                 const rep = l.fields['Rep Name'];
@@ -632,11 +816,11 @@
             repSelect.innerHTML = '<option value="">All Reps</option>' + [...reps].sort().map(r => `<option value="${r}">${r}</option>`).join('');
             repSelect.value = currentRep;
 
-            // Clients
             const clientSelect = document.getElementById('filter-client');
             const currentClient = clientSelect.value;
             const clientNames = Object.keys(clientColors).sort();
-            clientSelect.innerHTML = '<option value="">All (Assigned & Unassigned)</option><option value="__unassigned__">Unassigned Only</option>' + clientNames.map(c => `<option value="${c}">${c}</option>`).join('');
+            const radiusOpt = radiusLeadIds.size > 0 ? `<option value="__radius__">📍 Radius Selected Leads (${radiusLeadIds.size})</option>` : `<option value="__radius__" id="radius-filter-option" style="display:none;">📍 Radius Selected Leads</option>`;
+            clientSelect.innerHTML = '<option value="">All (Assigned & Unassigned)</option><option value="__unassigned__">Unassigned Only</option>' + radiusOpt + clientNames.map(c => `<option value="${c}">${c}</option>`).join('');
             clientSelect.value = currentClient;
         }
 
@@ -646,7 +830,6 @@
             const clientFilter = document.getElementById('filter-client').value;
             const sortBy = document.getElementById('filter-sort').value;
 
-            // Combine leads (unassigned) - they're the main dataset
             let leads = allLeadsData.map(l => {
                 const company = l.fields['Lead Name'] || 'Unknown';
                 const location = l.fields['Booking Address'] || '';
@@ -667,6 +850,7 @@
             if (regionFilter) leads = leads.filter(l => l.region === regionFilter);
             if (repFilter) leads = leads.filter(l => l.rep === repFilter);
             if (clientFilter === '__unassigned__') leads = leads.filter(l => !l.client);
+            else if (clientFilter === '__radius__') leads = leads.filter(l => radiusLeadIds.has(l.id));
             else if (clientFilter) leads = leads.filter(l => l.client.includes(clientFilter));
 
             // Sort
@@ -677,6 +861,9 @@
                 if (sortBy === 'region-asc') return a.region.localeCompare(b.region);
                 return 0;
             });
+
+            // Store for CSV export
+            lastFilteredLeads = leads;
 
             document.getElementById('leads-count').textContent = `${leads.length} leads`;
 
@@ -695,6 +882,29 @@
                     <td>${l.phone ? `<a href="tel:${l.phone}">${l.phone}</a>` : '-'}</td>
                 </tr>`;
             }).join('');
+        }
+
+        // ===== CSV EXPORT =====
+        function exportCSV() {
+            if (lastFilteredLeads.length === 0) return;
+            const headers = ['Company', 'Location', 'Region', 'Rep', 'Client', 'Status', 'Date Added', 'Email', 'Phone'];
+            const rows = lastFilteredLeads.map(l => {
+                const dateStr = l.created ? new Date(l.created).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                return [l.company, l.location, l.region, l.rep, l.client, l.status, dateStr, l.email, l.phone];
+            });
+
+            const csvContent = [headers, ...rows].map(row =>
+                row.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(',')
+            ).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            const filterLabel = document.getElementById('filter-client').value === '__radius__' ? 'radius-leads' : 'leads';
+            a.download = `tnw-resi-${filterLabel}-${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // ===== REFRESH & INIT =====
