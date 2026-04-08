@@ -1,9 +1,4 @@
 export default async function handler(req, res) {
-  const token = req.headers['x-auth-token'];
-  if (token !== process.env.APP_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
   const baseId = process.env.AIRTABLE_BASE_ID;
   const tableId = process.env.CLIENTS_TABLE_ID;
   const apiKey = process.env.AIRTABLE_API_KEY;

@@ -1,9 +1,4 @@
 export default async function handler(req, res) {
-  const token = req.headers['x-auth-token'];
-  if (token !== process.env.APP_PASSWORD) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-
   const baseId = process.env.AIRTABLE_BASE_ID;
   const tableId = process.env.LEADS_TABLE_ID;
   const apiKey = process.env.AIRTABLE_API_KEY;
@@ -11,7 +6,7 @@ export default async function handler(req, res) {
   try {
     let allRecords = [];
     let offset = null;
-    const filter = encodeURIComponent('{client}=BLANK()');
+    const filter = encodeURIComponent('{Client}=BLANK()');
 
     do {
       let url = `https://api.airtable.com/v0/${baseId}/${tableId}?filterByFormula=${filter}`;

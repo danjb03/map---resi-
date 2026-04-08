@@ -1,28 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>LIVE LEADS & CLIENTS Map</title>
+    <title>TNW Resi — LIVE LEADS & CLIENTS Map</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; overflow: hidden; }
-
-        /* ---- LOGIN ---- */
-        #login-screen {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex; align-items: center; justify-content: center; z-index: 9999;
-        }
-        #login-screen.hidden { display: none; }
-        .login-box { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center; max-width: 380px; width: 90%; }
-        .login-box h2 { color: #2c3e50; margin-bottom: 8px; font-size: 22px; }
-        .login-box p { color: #888; font-size: 13px; margin-bottom: 24px; }
-        .login-box input { width: 100%; padding: 12px 16px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 15px; outline: none; transition: border-color 0.2s; }
-        .login-box input:focus { border-color: #667eea; }
-        .login-box button { width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 12px; }
-        .login-box button:hover { opacity: 0.9; }
-        .login-error { color: #e74c3c; font-size: 13px; margin-top: 10px; display: none; }
-        #app-content { display: none; }
 
         /* ---- HEADER ---- */
         #controls {
@@ -120,18 +103,9 @@
     </style>
 </head>
 <body>
-    <div id="login-screen">
-        <div class="login-box">
-            <h2>TNW Energy</h2>
-            <p>Leads & Clients Map — Enter password to continue</p>
-            <input type="password" id="login-password" placeholder="Password" autocomplete="off">
-            <button onclick="attemptLogin()">Sign In</button>
-            <div class="login-error" id="login-error">Incorrect password. Try again.</div>
-        </div>
-    </div>
-    <div id="app-content">
+    <div id="app-content" style="display:block;">
         <div id="controls">
-            <h1>TNW Energy</h1>
+            <h1>TNW Resi</h1>
             <div id="status">Loading...</div>
             <div id="counts"><div class="count-badge" id="totalCount">0 total</div></div>
             <button id="refreshBtn">Refresh</button>
@@ -233,28 +207,8 @@
     </div>
 
     <script>
-        // ===== AUTH =====
-        let authToken = sessionStorage.getItem('tnw_token') || '';
-        function apiHeaders() { return { 'X-Auth-Token': authToken }; }
-
-        function attemptLogin() {
-            const pwd = document.getElementById('login-password').value;
-            if (pwd === '@TNWENERGY2025') {
-                authToken = pwd;
-                sessionStorage.setItem('tnw_auth', 'true');
-                sessionStorage.setItem('tnw_token', pwd);
-                unlockApp();
-            } else {
-                document.getElementById('login-error').style.display = 'block';
-            }
-        }
-        function unlockApp() {
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('app-content').style.display = 'block';
-            init();
-        }
-        document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') attemptLogin(); });
-        if (sessionStorage.getItem('tnw_auth') === 'true') { unlockApp(); }
+        // ===== INIT ON LOAD =====
+        function apiHeaders() { return {}; }
 
         // ===== CONFIG =====
         let CONFIG = { AIRTABLE_BASE_ID: '', LEADS_TABLE_ID: '', CLIENTS_TABLE_ID: '', GOOGLE_MAPS_API_KEY: '', AUTO_REFRESH_SECONDS: 300 };
@@ -264,7 +218,7 @@
         let clientColors = {}, clientIdToName = {};
         let visibilityState = { unassigned: true };
         let preserveViewport = false;
-        let clientActiveState = JSON.parse(localStorage.getItem('tnw_client_active') || '{}');
+        let clientActiveState = JSON.parse(localStorage.getItem('tnw_resi_client_active') || '{}');
         let lastClientCounts = {};
         let allLeadsData = [];  // stored for leads table
         let allClientsData = []; // stored for leads table + radius
@@ -315,7 +269,7 @@
         }
 
         // ===== CLIENT ACTIVE/INACTIVE =====
-        function saveClientActiveState() { localStorage.setItem('tnw_client_active', JSON.stringify(clientActiveState)); }
+        function saveClientActiveState() { localStorage.setItem('tnw_resi_client_active', JSON.stringify(clientActiveState)); }
         function isClientActive(name) { return clientActiveState[name] !== false; }
         function toggleClientActive(name, e) {
             e.stopPropagation();
@@ -376,8 +330,8 @@
         }
 
         // Load persisted geocode cache from localStorage
-        try { geocodeCache = JSON.parse(localStorage.getItem('tnw_geocode_cache') || '{}'); } catch(e) { geocodeCache = {}; }
-        function saveGeocodeCache() { try { localStorage.setItem('tnw_geocode_cache', JSON.stringify(geocodeCache)); } catch(e) {} }
+        try { geocodeCache = JSON.parse(localStorage.getItem('tnw_resi_geocode_cache') || '{}'); } catch(e) { geocodeCache = {}; }
+        function saveGeocodeCache() { try { localStorage.setItem('tnw_resi_geocode_cache', JSON.stringify(geocodeCache)); } catch(e) {} }
 
         async function geocodeAddress(address) {
             if (geocodeCache[address]) return geocodeCache[address];
@@ -428,8 +382,8 @@
             } catch (error) { console.error('Error fetching clients:', error); return []; }
 
             return allClients.filter(client => {
-                const clientType = (client.fields['client type'] || client.fields['Client Type'] || '').toLowerCase();
-                return !clientType.includes('fulfilled') && !clientType.includes('upsell') && !clientType.includes('marketing');
+                const status = (client.fields['Status'] || '').toLowerCase();
+                return status !== 'inactive';
             });
         }
 
@@ -530,9 +484,9 @@
 
             // Collect all addresses to geocode
             const allAddresses = new Set();
-            unassignedLeads.forEach(l => { if (l.fields.location) allAddresses.add(l.fields.location); });
+            unassignedLeads.forEach(l => { if (l.fields['Booking Address']) allAddresses.add(l.fields['Booking Address']); });
             clients.forEach(c => {
-                const loc = c.fields.location || c.fields.Location || c.fields.address || c.fields.Address || c.fields['Client Address'] || c.fields['client address'];
+                const loc = c.fields['Mailing Address'];
                 if (loc) allAddresses.add(loc);
             });
 
@@ -547,15 +501,16 @@
 
             // Plot leads
             for (const lead of unassignedLeads) {
-                const company = lead.fields.company || lead.fields.Company || lead.fields.name || lead.fields.Name || 'Unknown';
-                const location = lead.fields.location;
-                const sdrName = lead.fields['SDR Name'] || lead.fields['sdr name'] || lead.fields['Rep Name'] || null;
+                const company = lead.fields['Lead Name'] || 'Unknown';
+                const location = lead.fields['Booking Address'];
+                const sdrName = lead.fields['Rep Name'] || null;
+                const repDisplay = Array.isArray(sdrName) ? sdrName[0] : sdrName;
                 if (!location) continue;
                 const coords = geocodeCache[location];
                 if (!coords) continue;
 
                 lead._coords = coords;
-                lead._region = classifyRegion(coords.lat, coords.lng);
+                lead._region = lead.fields['City / Region'] || classifyRegion(coords.lat, coords.lng);
 
                 const marker = new google.maps.Marker({
                     position: coords, map: map, title: company,
@@ -563,18 +518,34 @@
                 });
                 marker.markerCategory = 'unassigned';
 
+                const leadStatus = lead.fields['Status'] || '';
+                const leadSuccess = lead.fields['Success?'] || '';
+                const leadType = lead.fields['Solar / Battery'] || '';
+                const leadEnergyCost = lead.fields['Energy Costs'] || '';
+                const leadNotes = lead.fields['Notes'] || '';
+                const leadPhoto = lead.fields['Image / Property Photo'];
+                const leadEmail = lead.fields['Lead Email'] || '';
+                const leadPhone = lead.fields['Lead Number (Phone)'] || '';
+                const dateBooked = lead.fields['Date Booked'] ? new Date(lead.fields['Date Booked']).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                const apptDate = lead.fields['Date & Time of Appointment'] ? new Date(lead.fields['Date & Time of Appointment']).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+
                 const infoWindow = new google.maps.InfoWindow({
                     content: `<div style="padding:12px;max-width:320px;">
                         <div style="background:#ff0000;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">UNASSIGNED LEAD</div>
+                        ${leadType ? `<div style="background:#667eea;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;margin-left:4px;">${leadType}</div>` : ''}
                         <h3 style="margin:0 0 10px 0;color:#2c3e50;font-size:16px;">${company}</h3>
-                        ${sdrName ? `<p style="margin:5px 0;font-size:13px;color:#667eea;"><strong>Booked by:</strong> ${sdrName}</p>` : ''}
-                        ${lead.fields.photos && lead.fields.photos.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${lead.fields.photos[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
+                        ${repDisplay ? `<p style="margin:5px 0;font-size:13px;color:#667eea;"><strong>Rep:</strong> ${repDisplay}</p>` : ''}
+                        ${leadPhoto && leadPhoto.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${leadPhoto[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
                         <p style="margin:5px 0;font-size:13px;"><strong>📍</strong> ${location}</p>
                         <p style="margin:5px 0;font-size:13px;"><strong>📌</strong> <span class="region-badge ${regionClass(lead._region)}">${lead._region}</span></p>
-                        ${lead.fields.email ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${lead.fields.email}">${lead.fields.email}</a></p>` : ''}
-                        ${lead.fields.phone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${lead.fields.phone}">${lead.fields.phone}</a></p>` : ''}
-                        ${lead.fields.status ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${lead.fields.status}</p>` : ''}
-                        ${lead.fields['Energy consumption information'] ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #667eea;"><div style="font-weight:600;font-size:12px;color:#667eea;margin-bottom:5px;">Energy Info</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${lead.fields['Energy consumption information'].substring(0,200)}${lead.fields['Energy consumption information'].length > 200 ? '...' : ''}</div></div>` : ''}
+                        ${leadEmail ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${leadEmail}">${leadEmail}</a></p>` : ''}
+                        ${leadPhone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${leadPhone}">${leadPhone}</a></p>` : ''}
+                        ${leadStatus ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${leadStatus}</p>` : ''}
+                        ${leadSuccess ? `<p style="margin:5px 0;font-size:13px;"><strong>Result:</strong> ${leadSuccess}</p>` : ''}
+                        ${dateBooked ? `<p style="margin:5px 0;font-size:13px;"><strong>Booked:</strong> ${dateBooked}</p>` : ''}
+                        ${apptDate ? `<p style="margin:5px 0;font-size:13px;"><strong>Appointment:</strong> ${apptDate}</p>` : ''}
+                        ${leadEnergyCost ? `<p style="margin:5px 0;font-size:13px;"><strong>Energy Cost:</strong> ${leadEnergyCost}</p>` : ''}
+                        ${leadNotes ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #667eea;"><div style="font-weight:600;font-size:12px;color:#667eea;margin-bottom:5px;">Notes</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${leadNotes.substring(0,300)}${leadNotes.length > 300 ? '...' : ''}</div></div>` : ''}
                         <p style="margin:10px 0 0 0;padding-top:8px;border-top:1px solid #eee;"><a href="https://airtable.com/${CONFIG.AIRTABLE_BASE_ID}/${CONFIG.LEADS_TABLE_ID}/${lead.id}?blocks=hide" target="_blank" style="color:#667eea;text-decoration:none;font-weight:500;font-size:12px;">Open in Airtable →</a></p>
                     </div>`
                 });
@@ -587,7 +558,7 @@
             // Plot clients
             for (const client of clients) {
                 const clientName = client.fields['Client Name'];
-                const location = client.fields.location || client.fields.Location || client.fields.address || client.fields.Address || client.fields['Client Address'] || client.fields['client address'];
+                const location = client.fields['Mailing Address'];
                 if (!location || !clientName) continue;
                 const coords = geocodeCache[location];
                 if (!coords) continue;
@@ -602,19 +573,32 @@
                 });
                 marker.markerCategory = clientName;
 
+                const clientPhoto = client.fields['Client Photo'];
+                const clientEmail = client.fields['Email Address'] || '';
+                const clientPhone = client.fields['Phone Number'] || '';
+                const clientType = client.fields['Type'] || '';
+                const clientTier = client.fields['Company Tier'] || '';
+                const clientStatus = client.fields['Status'] || '';
+                const clientContact = client.fields['Contact Person'] || '';
+                const clientNotes = client.fields['Notes'] || '';
+                const clientInternal = client.fields['Internal Notes'] || '';
+                const clientBilling = client.fields['Billing Terms'] || '';
+
                 const infoWindow = new google.maps.InfoWindow({
                     content: `<div style="padding:12px;max-width:320px;">
                         <div style="background:#00BFFF;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">CLIENT</div>
+                        ${clientTier ? `<div style="background:#2ecc71;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;margin-left:4px;">${clientTier}</div>` : ''}
                         <h3 style="margin:0 0 10px 0;color:#2c3e50;font-size:16px;">${clientName}</h3>
-                        ${client.fields.photos && client.fields.photos.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${client.fields.photos[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
+                        ${clientContact ? `<p style="margin:5px 0;font-size:13px;"><strong>Contact:</strong> ${clientContact}</p>` : ''}
+                        ${clientPhoto && clientPhoto.length > 0 ? `<div style="margin:10px 0;border-radius:8px;overflow:hidden;background:#f0f0f0;"><img src="${clientPhoto[0].url}" style="width:100%;height:180px;object-fit:cover;display:block;" onerror="this.style.display='none';this.nextElementSibling.style.display='block';"><div style="display:none;padding:40px;text-align:center;color:#999;font-size:12px;">Photo unavailable</div></div>` : ''}
                         <p style="margin:5px 0;font-size:13px;"><strong>📍</strong> ${location}</p>
-                        ${client.fields.email ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${client.fields.email}">${client.fields.email}</a></p>` : ''}
-                        ${client.fields.phone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${client.fields.phone}">${client.fields.phone}</a></p>` : ''}
-                        ${client.fields['client type'] ? `<p style="margin:5px 0;font-size:13px;"><strong>Type:</strong> ${client.fields['client type']}</p>` : ''}
-                        ${client.fields.status ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${client.fields.status}</p>` : ''}
-                        ${client.fields.info || client.fields.Info ? `<div style="margin:10px 0;padding:10px;background:#e3f2fd;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${(client.fields.info || client.fields.Info).substring(0,400)}</div></div>` : ''}
-                        ${client.fields['Energy consumption information'] ? `<div style="margin:10px 0;padding:10px;background:#e3f2fd;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Energy Info</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${client.fields['Energy consumption information'].substring(0,200)}</div></div>` : ''}
-                        ${client.fields.notes ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Notes</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${client.fields.notes.substring(0,200)}</div></div>` : ''}
+                        ${clientEmail ? `<p style="margin:5px 0;font-size:13px;"><a href="mailto:${clientEmail}">${clientEmail}</a></p>` : ''}
+                        ${clientPhone ? `<p style="margin:5px 0;font-size:13px;"><a href="tel:${clientPhone}">${clientPhone}</a></p>` : ''}
+                        ${clientType ? `<p style="margin:5px 0;font-size:13px;"><strong>Type:</strong> ${clientType}</p>` : ''}
+                        ${clientStatus ? `<p style="margin:5px 0;font-size:13px;"><strong>Status:</strong> ${clientStatus}</p>` : ''}
+                        ${clientBilling ? `<p style="margin:5px 0;font-size:13px;"><strong>Billing:</strong> ${clientBilling}</p>` : ''}
+                        ${clientNotes ? `<div style="margin:10px 0;padding:10px;background:#e3f2fd;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Notes</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${clientNotes.substring(0,300)}</div></div>` : ''}
+                        ${clientInternal ? `<div style="margin:10px 0;padding:10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #00BFFF;"><div style="font-weight:600;font-size:12px;color:#00BFFF;margin-bottom:5px;">Internal Notes</div><div style="font-size:12px;color:#555;max-height:100px;overflow-y:auto;">${clientInternal.substring(0,300)}</div></div>` : ''}
                         <p style="margin:10px 0 0 0;padding-top:8px;border-top:1px solid #eee;"><a href="https://airtable.com/${CONFIG.AIRTABLE_BASE_ID}/${CONFIG.CLIENTS_TABLE_ID}/${client.id}?blocks=hide" target="_blank" style="color:#00BFFF;text-decoration:none;font-weight:500;font-size:12px;">Open in Airtable →</a></p>
                     </div>`
                 });
@@ -640,7 +624,7 @@
             // Reps
             const reps = new Set();
             allLeadsData.forEach(l => {
-                const rep = l.fields['SDR Name'] || l.fields['sdr name'] || l.fields['Rep Name'];
+                const rep = l.fields['Rep Name'];
                 if (rep) reps.add(Array.isArray(rep) ? rep[0] : rep);
             });
             const repSelect = document.getElementById('filter-rep');
@@ -664,17 +648,17 @@
 
             // Combine leads (unassigned) - they're the main dataset
             let leads = allLeadsData.map(l => {
-                const company = l.fields.company || l.fields.Company || l.fields.name || l.fields.Name || 'Unknown';
-                const location = l.fields.location || '';
-                const rep = l.fields['SDR Name'] || l.fields['sdr name'] || l.fields['Rep Name'] || '';
+                const company = l.fields['Lead Name'] || 'Unknown';
+                const location = l.fields['Booking Address'] || '';
+                const rep = l.fields['Rep Name'] || '';
                 const repStr = Array.isArray(rep) ? rep[0] : rep;
-                const client = l.fields.client || '';
+                const client = l.fields['Client'] || '';
                 const clientStr = Array.isArray(client) ? client.join(', ') : client;
-                const status = l.fields.status || '';
-                const email = l.fields.email || '';
-                const phone = l.fields.phone || '';
-                const created = l.createdTime || '';
-                const region = l._region || 'Unknown';
+                const status = l.fields['Status'] || '';
+                const email = l.fields['Lead Email'] || '';
+                const phone = l.fields['Lead Number (Phone)'] || '';
+                const created = l.fields['Date Booked'] || l.createdTime || '';
+                const region = l._region || l.fields['City / Region'] || 'Unknown';
                 const id = l.id;
                 return { company, location, rep: repStr, client: clientStr, status, email, phone, created, region, id };
             });
@@ -740,6 +724,7 @@
         }
 
         document.getElementById('refreshBtn').addEventListener('click', plotAll);
+        init();
     </script>
 </body>
 </html>
