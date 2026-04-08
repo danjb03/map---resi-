@@ -121,10 +121,10 @@
                 <div id="legend">
                     <h3>Legend & Filters</h3>
                     <div class="legend-section">
-                        <div class="legend-section-title">Unassigned Leads</div>
+                        <div class="legend-section-title">All Leads</div>
                         <div class="legend-item" data-type="unassigned" onclick="toggleType('unassigned')">
                             <div class="legend-dot" style="background: #ff0000;"></div>
-                            <div class="legend-label">Unassigned Leads</div>
+                            <div class="legend-label">All Leads</div>
                             <div class="legend-count" id="unassigned-count">0</div>
                         </div>
                     </div>
@@ -531,7 +531,7 @@
 
                 const infoWindow = new google.maps.InfoWindow({
                     content: `<div style="padding:12px;max-width:320px;">
-                        <div style="background:#ff0000;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">UNASSIGNED LEAD</div>
+                        <div style="background:#ff0000;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;">LEAD</div>
                         ${leadType ? `<div style="background:#667eea;color:white;padding:4px 8px;border-radius:4px;display:inline-block;font-size:11px;margin-bottom:8px;margin-left:4px;">${leadType}</div>` : ''}
                         <h3 style="margin:0 0 10px 0;color:#2c3e50;font-size:16px;">${company}</h3>
                         ${repDisplay ? `<p style="margin:5px 0;font-size:13px;color:#667eea;"><strong>Rep:</strong> ${repDisplay}</p>` : ''}

@@ -6,11 +6,9 @@ export default async function handler(req, res) {
   try {
     let allRecords = [];
     let offset = null;
-    const filter = encodeURIComponent('{Client}=BLANK()');
-
     do {
-      let url = `https://api.airtable.com/v0/${baseId}/${tableId}?filterByFormula=${filter}`;
-      if (offset) url += `&offset=${offset}`;
+      let url = `https://api.airtable.com/v0/${baseId}/${tableId}`;
+      if (offset) url += `?offset=${offset}`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${apiKey}` },
